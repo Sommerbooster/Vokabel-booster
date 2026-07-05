@@ -32,7 +32,7 @@ header.app h1{font-size:1.05rem;color:var(--color-heading);margin:0;line-height:
   .nav{justify-content:flex-start;width:100%;}
   .nav button{padding:7px 10px;font-size:.8rem;}
 }
-.nav button{padding:8px 12px;font-size:.85rem;background:transparent;color:var(--accent);border:1px solid var(--color-border);border-radius:var(--radius-sm);cursor:pointer;}
+.nav button{padding:8px 12px;font-size:.85rem;background:transparent;color:var(--accent);border:1px solid var(--accent);border-radius:var(--radius-sm);cursor:pointer;}
 .nav button:hover{background:var(--accent-tint);}
 h1,h2,h3{color:var(--color-heading);line-height:var(--lh-tight);}
 .muted{color:var(--color-muted);}
@@ -42,7 +42,7 @@ button{font-family:inherit;font-size:1rem;cursor:pointer;border-radius:var(--rad
 .btn:hover{background:var(--accent-hover);}
 .btn.sec{background:var(--secondary);color:var(--on-secondary);border-color:var(--secondary);}
 .btn.sec:hover{background:var(--secondary-hover);}
-.btn.ghost{background:transparent;color:var(--accent);border-color:var(--color-border);}
+.btn.ghost{background:transparent;color:var(--accent);border-color:var(--accent);}
 .btn.ghost:hover{background:var(--accent-tint);}
 .btn.block{display:block;width:100%;margin-top:var(--space-2);}
 .btn.small{padding:8px 12px;font-size:.9rem;}
@@ -99,7 +99,7 @@ Object.keys(BONUS).forEach(lv=>{ BONUS[lv].forEach(w=>{ VOCAB[lv].push({en:w.en,
 const $=(s,r=document)=>r.querySelector(s);
 const app=$("#app");
 const DAY=864e5;
-const APP_VERSION="4 · 05.07.2026";
+const APP_VERSION="6 · 05.07.2026";
 const todayISO=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10);};
 const INTERVAL={1:2,2:3,3:7}; // Lernen Tag 0 → 1. Wdh. +2 → 2. Wdh. +5 (= „sicher") → Kontrolle +7
 const MILES=[50,75,100,150,200];
@@ -145,16 +145,18 @@ function mastery(cs){ if(!cs.seen||cs.box===0)return "neu"; if(cs.box>=3)return 
 // Calendar helpers
 function isLD(daysPerWeek,wday){ return (daysPerWeek===7)||(daysPerWeek===6&&wday!==0)||(daysPerWeek===5&&wday!==0&&wday!==6); }
 function makeDates(start,daysPerWeek,count){ const out=[]; let d=new Date(start+"T00:00"); while(out.length<count){ if(isLD(daysPerWeek,d.getDay())) out.push(new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)); d=new Date(d.getTime()+DAY); } return out; }
-function dayIndex(){ if(!S.plan)return -1; const t=todayISO(); let idx=-1; S.plan.dates.forEach((d,i)=>{ if(d<=t) idx=i; }); return idx; }
-function isLearningToday(){ return S.plan&&S.plan.dates.includes(todayISO()); }
+function dayIndex(){ if(!S.plan)return -1; return Math.max(0, Math.round((new Date(todayISO())-new Date(S.plan.start))/DAY)); } // echte Kalendertage seit Start (für Wiederholungsabstände)
+function isLearningToday(){ return !!S.plan; } // Lernen ist an JEDEM Tag möglich – Pausen bestimmt der Anwender
 function di0(){ const d=dayIndex(); return d<0?0:d; }
-function minLD(){ return 2*S.settings.days; } // min 2 Wochen × Lerntage/Woche
+function minLD(){ return 2*S.settings.days; } // Minimum an Lerntagen gesamt (z. B. 2 Wochen × 5 = 10)
+function totalLD(){ return S.plan.dates.length; } // gewählte Lerntage gesamt (frei verteilbar)
+function doneLD(){ return Object.keys(S.done).length; } // bereits absolvierte Lerntage
 
 // Pace model
 function avgSec(){ return (S.calib&&S.calib.n>=5)? Math.max(6,S.calib.ms/S.calib.n/1000) : 22; }
 function dailyBudget(){ return Math.max(6,Math.min(220,Math.round(S.settings.minutes*60/avgSec()))); }
 function introducedCount(){ return S.plan.idxOrder.filter(i=>cardState(i).seen).length; }
-function newPerDayEst(){ const el=di0()+1; const intro=introducedCount(); if(intro>0) return Math.max(1,Math.round(intro/el)); return Math.max(1,dailyBudget()); }
+function newPerDayEst(){ const el=Math.max(1,Object.keys(S.newLog).length); const intro=introducedCount(); if(intro>0) return Math.max(1,Math.round(intro/el)); return Math.max(1,dailyBudget()); } // Ist-Tempo je LERNTAG (Pausentage zählen nicht mit)
 function projectedTotalLD(){ return Math.max(minLD(), Math.ceil(S.plan.total/newPerDayEst())); }
 function projectedEndDate(){ const n=projectedTotalLD(); const ds=makeDates(S.plan.start,S.settings.days,n); return ds[ds.length-1]; }
 // Tempo-Prognosen erst, wenn wirklich gelernt wurde UND mindestens ein Durchlauf abgeschlossen ist
@@ -165,7 +167,10 @@ function show(html){ app.innerHTML=html; renderStatus(); window.scrollTo(0,0); }
 function renderStatus(){ const el=$("#statusStrip"); if(!S||!S.settings||!S.plan){ el.innerHTML=""; return; }
   const st=stats(); let pct,label;
   if(SESS){ pct=Math.round(SESS.done/Math.max(1,SESS.target)*100); label=SESS.done+"/"+SESS.target; }
-  else{ const q=buildQueue(); const t=q.due.length+q.news.length; const done=!!S.done[todayISO()]; pct=done?100:(t?0:100); label=done?"geschafft ✓":(t?t+" offen":"nichts fällig"); }
+  else{ const q=buildQueue(); const t=q.due.length+q.news.length; const done=!!S.done[todayISO()]; const learned=S.newLog[todayISO()]||0; const goal=learned+t;
+    if(done){ pct=100; label="geschafft ✓"; }
+    else if(goal>0){ pct=Math.round(learned/goal*100); label=learned+"/"+goal; }
+    else{ pct=100; label="nichts fällig"; } }
   el.innerHTML=`<div class="statusbox">
     <div class="blabel"><span>Heute</span><span>${label} · 🔥 ${S.streak}</span></div><div class="bar"><div style="width:${pct}%"></div></div>
     <div class="blabel" style="margin-top:5px"><span>Gesamt sicher</span><span>${st.sicher}/${st.totalTracked} (${st.pct}%)</span></div><div class="bar sec"><div style="width:${st.pct}%"></div></div>
@@ -225,7 +230,7 @@ function screenSetup(){
   <div class="opts" id="oMin">${[15,20,30,45].map(m=>`<div class="opt ${d.minutes===m?"active":""}" data-v="${m}">${m} Min</div>`).join("")}</div>
   <label class="fld">Abfrage-Richtung</label>
   <div class="opts" id="oDir"><div class="opt ${d.dir==="en2de"?"active":""}" data-v="en2de">Englisch → Deutsch</div><div class="opt ${d.dir==="de2en"?"active":""}" data-v="de2en">Deutsch → Englisch</div></div>
-  <div class="info">Deine Zeit ist der Richtwert: Die App misst dein Tempo und gibt dir so viele Wörter, wie in deine Minuten passen – bist du schnell (vieles noch bekannt), kommen automatisch mehr dran. „Sicher" wird ein Wort trotzdem erst, wenn du es an mehreren Tagen mit Abständen richtig erinnerst. Mindestens 2 Wochen / 5 Tage, weil verteiltes Lernen am besten hängen bleibt.</div>
+  <div class="info">Deine Wahl ergibt die Gesamtzahl deiner Lerntage (z. B. 2 Wochen × 5 Tage = 10 Lerntage – das absolute Minimum, weniger geht nicht). Wann du lernst und wann du pausierst, bestimmst du selbst: auch 10 Tage am Stück oder z. B. 6 Tage, 1 Tag Pause, dann 4 Tage. Starten kannst du sofort. „Sicher" wird ein Wort erst, wenn du es an mehreren Tagen mit Abständen richtig erinnerst – deshalb die Mindestzahl.</div>
   <button class="btn block" id="mkplan">Lernplan erstellen</button></div>`);
   const sel={level:d.level,scope:d.scope,weeks:d.weeks,days:d.days,minutes:d.minutes,dir:d.dir};
   function bind(id,key,num){ app.querySelectorAll("#"+id+" .opt").forEach(o=>o.onclick=()=>{ app.querySelectorAll("#"+id+" .opt").forEach(x=>x.classList.remove("active")); o.classList.add("active"); sel[key]=num?+o.dataset.v:o.dataset.v; }); }
@@ -249,12 +254,13 @@ function buildQueue(extra){
   const extraPool=(expand||unlocked)? extraIdx().filter(i=>!cardState(i).seen) : [];
   const notSeen=corePool.concat(extraPool);
   const learnedToday=S.newLog[todayISO()]||0;
-  const base=(isLearningToday()||unlocked)? dailyBudget() : 0; // an Nicht-Lerntagen nur per Extra-Kontingent („Trotzdem weiter lernen")
+  const base=dailyBudget(); // Start jederzeit möglich – die App kennt keine festen Ruhetage
   const timeLeft=Math.max(0, base-learnedToday-due.length);
-  // Plan-Deckelung (nur ohne Mehr-Lernen-Modus): Restwörter gleichmäßig auf verbleibende Plantage
-  const daysLeft=Math.max(1, S.plan.dates.filter(d=>d>=todayISO()).length);
-  const share=Math.ceil((corePool.length+learnedToday)/daysLeft);
-  const planLeft=(unlocked||expand)? timeLeft : Math.max(0, share-learnedToday);
+  // Plan-Deckelung (nur ohne Mehr-Lernen-Modus): Restwörter gleichmäßig auf übrige LERNTAGE (heute zählt als laufender Lerntag)
+  const doneT=!!S.done[todayISO()];
+  const ldRem=Math.max(1, totalLD()-doneLD());
+  const share=Math.ceil((corePool.length+learnedToday)/ldRem);
+  const planLeft=(unlocked||expand)? timeLeft : (doneT? 0 : Math.max(0, share-learnedToday));
   // extra = einmaliges Kontingent nur für die jetzt gestartete Übung (stapelt sich nicht)
   const newCount=Math.min(Math.min(timeLeft,planLeft)+(extra||0), notSeen.length);
   return {due,news:notSeen.slice(0,newCount)};
@@ -262,28 +268,35 @@ function buildQueue(extra){
 
 // Plan overview (projection)
 function screenPlan(){
-  const p=S.plan; const di=dayIndex(); const est=newPerDayEst(); const projEnd=projectedEndDate(); const projLD=projectedTotalLD();
-  const plannedEnd=p.dates[p.dates.length-1];
+  const p=S.plan; const est=newPerDayEst(); const projLD=projectedTotalLD();
   const remaining=p.total-introducedCount();
-  let cum=0, estShow=null;
-  const rows=p.dates.map((dt,i)=>{ const past=i<di||(i===di&&S.done[dt]);
-    let n; if(past){ n=S.newLog[dt]||0; }
-    else { const left=p.dates.length-i; const rem=Math.max(0,p.total-cum); n=Math.min(dailyBudget(),Math.ceil(rem/left)); if(estShow===null)estShow=n; }
-    cum+=n; return `<tr class="${dt===todayISO()?"today":""}"><td>Tag ${i+1}</td><td>${fmt(dt)}</td><td>${past?n:"~"+n}</td><td>${past?cum:"~"+cum}</td></tr>`; }).join("");
+  const doneDates=Object.keys(S.done).sort(); const nLD=p.dates.length;
+  let cum=0, estShow=null; const rowsArr=[];
+  for(let i=0;i<nLD;i++){
+    const past=i<doneDates.length;
+    const current=!past&&i===doneDates.length;
+    let n,dateLabel;
+    if(past){ n=S.newLog[doneDates[i]]||0; dateLabel=fmt(doneDates[i]); }
+    else{ const left=nLD-i; const rem=Math.max(0,p.total-cum); n=Math.min(dailyBudget(),Math.ceil(rem/left)); if(estShow===null)estShow=n; dateLabel=current?fmt(todayISO()):"frei"; }
+    cum+=n;
+    rowsArr.push(`<tr class="${current?"today":""}"><td>Tag ${i+1}</td><td>${dateLabel}</td><td>${past?n:"~"+n}</td><td>${past?cum:"~"+cum}</td></tr>`);
+  }
+  const rows=rowsArr.join("");
   if(estShow===null)estShow=est;
   let note="";
   if(remaining<=0){ const stp=stats(); const open=stp.totalTracked-stp.sicher;
-    note= todayISO()>plannedEnd
-      ? (open>0? `<div class="banner">🧱 Lernphase beendet – Festigungsphase läuft: noch <b>${open}</b> ${open===1?"Wort":"Wörter"} auf dem Weg zu „sicher". Übe täglich kurz weiter, bis alles sitzt.</div>` : `<div class="banner">🎉 Alle Wörter sind „sicher" – Plan abgeschlossen! Wenn du magst, erweitere deinen Wortschatz.</div>`)
-      : `<div class="banner">Alle Wörter sind eingeführt – jetzt festigen bis ${fmt(plannedEnd)}. Wenn du magst, erweitere deinen Wortschatz.</div>`; }
+    note= open>0
+      ? `<div class="banner">🧱 Alle Wörter sind eingeführt – Festigungsphase: noch <b>${open}</b> ${open===1?"Wort":"Wörter"} auf dem Weg zu „sicher". Übe einfach weiter, bis alles sitzt.</div>`
+      : `<div class="banner">🎉 Alle Wörter sind „sicher" – Plan abgeschlossen! Wenn du magst, erweitere deinen Wortschatz.</div>`; }
   else if(S.expand){ note=`<div class="banner">🚀 <b>Mehr-Lernen-Modus aktiv:</b> Dein Tempo bestimmt dein Tagespensum. Extra-Wörter kommen automatisch dazu ${S.settings.scope==="K"?"(zuerst die 150 Erweiterungs-Wörter deiner Stufe, danach der Bonus-Wortschatz)":"(aus dem Bonus-Wortschatz deiner Stufe)"} – die Wiederholungen deines Pakets laufen dabei immer zuerst, bis alles „sicher" ist.<div class="row" style="margin-top:var(--space-2)"><button class="btn ghost small" id="expoff">Modus beenden</button></div></div>`; }
-  else if(hasLearnHistory()&&Math.ceil(p.total/newPerDayEst())<p.dates.length){ const rawLD=Math.ceil(p.total/newPerDayEst()); const introEnd=p.dates[Math.max(0,Math.min(rawLD,p.dates.length)-1)]; const canShorten=projLD<p.dates.length;
-    note=`<div class="banner">🚀 Bei deinem Tempo hast du voraussichtlich schon am <b>${fmt(introEnd)}</b> alle Wörter durch – früher als geplant. Was möchtest du?<div class="row" style="margin-top:var(--space-2)">${canShorten?`<button class="btn small" id="fit">Plan verkürzen</button>`:``}<button class="btn sec small" id="expon">Mehr Wörter in gleicher Zeit</button></div></div>`; }
-  else if(hasLearnHistory()){ const daysLeftP=Math.max(1,p.dates.filter(d=>d>=todayISO()).length); const need=Math.ceil(remaining/daysLeftP);
-    if(dailyBudget()<need){ const nLD=Math.max(minLD(),Math.ceil(p.total/Math.max(1,dailyBudget()))); const ds=makeDates(p.start,S.settings.days,nLD);
-      note=`<div class="warn">Mit deiner Lernzeit (${S.settings.minutes} Min/Tag) brauchst du eher bis <b>${fmt(ds[ds.length-1])}</b>. Das ist ok – verteiltes Lernen bleibt besser hängen. Tipp: Unter „Anpassen" kannst du die tägliche Lernzeit erhöhen.</div>`; } }
+  else if(hasLearnHistory()&&Math.ceil(p.total/newPerDayEst())<p.dates.length){ const rawLD=Math.ceil(p.total/newPerDayEst()); const canShorten=projLD<p.dates.length;
+    note=`<div class="banner">🚀 Bei deinem Tempo hast du voraussichtlich schon nach <b>~${rawLD} Lerntagen</b> (statt ${p.dates.length}) alle Wörter durch – früher als geplant. Was möchtest du?<div class="row" style="margin-top:var(--space-2)">${canShorten?`<button class="btn small" id="fit">Plan verkürzen</button>`:``}<button class="btn sec small" id="expon">Mehr Wörter in gleicher Zeit</button></div></div>`; }
+  else if(hasLearnHistory()){ const ldRemP=Math.max(1,p.dates.length-doneLD()); const need=Math.ceil(remaining/ldRemP);
+    if(dailyBudget()<need){ const needLD=Math.max(minLD(),Math.ceil(p.total/Math.max(1,dailyBudget())));
+      note=`<div class="warn">Mit deiner Lernzeit (${S.settings.minutes} Min/Tag) brauchst du eher <b>~${needLD} Lerntage</b> statt ${p.dates.length}. Das ist ok – verteiltes Lernen bleibt besser hängen. Tipp: Unter „Anpassen" kannst du die tägliche Lernzeit erhöhen.</div>`; } }
   show(`<div class="card">${greetHtml()}<div class="top"><h2>Dein Lernplan</h2><span class="pill">${LEVEL_LABEL[S.settings.level]}</span></div>
-  <p class="small muted">${S.settings.scope==="E"?"Erweitert (450)":"Kern (300)"} · ${S.settings.weeks} Wochen · ${S.settings.days} Lerntage/Woche · ${S.settings.minutes} Min/Tag · ${S.settings.dir==="en2de"?"EN→DE":"DE→EN"} · ~${estShow} neue/Tag geplant</p>
+  <p class="small muted">${S.settings.scope==="E"?"Erweitert (450)":"Kern (300)"} · ${p.dates.length} Lerntage gesamt · ${S.settings.minutes} Min/Tag · ${S.settings.dir==="en2de"?"EN→DE":"DE→EN"} · ~${estShow} neue/Lerntag geplant</p>
+  <p class="small muted">Du bestimmst selbst, an welchen Tagen du lernst und wann du pausierst – wichtig ist nur, dass du alle ${p.dates.length} Lerntage machst.</p>
   ${note}
   <table class="plan"><thead><tr><th>Lerntag</th><th>Datum</th><th>Neue Wörter</th><th>Gesamt</th></tr></thead><tbody>${rows}</tbody></table>
   <div class="row noprint" style="margin-top:var(--space-3)"><button class="btn" id="go">Heute üben →</button><button class="btn ghost" id="prn">Drucken</button><button class="btn ghost" id="adj">Anpassen</button><button class="btn ghost" id="back">Zurück</button></div></div>`);
@@ -293,7 +306,7 @@ function screenPlan(){
   const expoff=$("#expoff"); if(expoff)expoff.onclick=()=>{ S.expand=false; saveState(); screenPlan(); };
 }
 function adjustToPace(){ const n=projectedTotalLD(); S.plan.dates=makeDates(S.plan.start,S.settings.days,n); saveState();
-  if(n===minLD()) alert("Kürzer als 2 Wochen / 5 Lerntage pro Woche geht bewusst nicht. Nutze die Zeit zum Festigen und Wiederholen – oder erweitere deinen Wortschatz (Anpassen → Erweitert / andere Stufe).");
+  if(n===minLD()) alert("Weniger als "+minLD()+" Lerntage insgesamt geht bewusst nicht – verteiltes Lernen braucht diese Mindestzahl. Nutze die Zeit zum Festigen und Wiederholen – oder erweitere deinen Wortschatz (Anpassen → Erweitert / andere Stufe).");
   screenPlan(); }
 
 // Home
@@ -303,21 +316,21 @@ function screenHome(){
   const gap=S.lastDate?Math.round((new Date(todayISO())-new Date(S.lastDate))/DAY):0;
   const reminder = gap>=3? `<div class="banner">👋 ${pep("back")}</div>`:"";
   const remaining=S.plan.total-introducedCount();
-  const projEnd=projectedEndDate(); const ahead = projectedTotalLD()<S.plan.dates.length;
-  const planOver = todayISO()>S.plan.dates[S.plan.dates.length-1];
+  const ahead = projectedTotalLD()<S.plan.dates.length;
+  const planOver = doneLD()>=totalLD();
   const openWords = st.totalTracked-st.sicher;
-  let dayLabel = planOver? (openWords>0? "Festigungsphase":"Plan abgeschlossen") : (di>=0? `Lerntag ${di+1} von ${S.plan.dates.length}` : (todayISO()<S.plan.start? "Plan startet am "+fmt(S.plan.start):"Freies Üben"));
+  let dayLabel = planOver? (openWords>0? "Festigungsphase":"Plan abgeschlossen") : `Lerntag ${Math.min(doneLD()+1,totalLD())} von ${totalLD()}`;
   const festBanner = planOver&&openWords>0? `<div class="banner">🧱 <b>Lernphase geschafft – jetzt kommt die Festigung!</b> Die zuletzt gelernten Wörter brauchen noch ihre Wiederholungen mit Abstand, damit sie vom Kurzzeit- ins Langzeitgedächtnis rutschen. Unsere Empfehlung: Übe einfach noch ein paar Tage kurz weiter – noch <b>${openWords}</b> ${openWords===1?"Wort ist":"Wörter sind"} auf dem Weg zu „sicher".</div>`:"";
   const hist=hasLearnHistory();
   const rawLD=Math.ceil(S.plan.total/newPerDayEst()); const aheadAny=hist&&rawLD<S.plan.dates.length; const canShorten=projectedTotalLD()<S.plan.dates.length;
-  const introEnd=S.plan.dates[Math.max(0,Math.min(rawLD,S.plan.dates.length)-1)];
-  const speedBanner = (aheadAny&&!S.expand&&remaining>0&&!planOver)? `<div class="banner">🚀 <b>Stark – du bist schneller als geplant!</b> Bei deinem Tempo hast du voraussichtlich schon am <b>${fmt(introEnd)}</b> alle Wörter durch. Was möchtest du?<div class="row" style="margin-top:var(--space-2)">${canShorten?`<button class="btn small" id="hfit">Plan verkürzen</button>`:``}<button class="btn sec small" id="hexp">Mehr Wörter in gleicher Zeit</button></div></div>`:"";
+  const speedBanner = (aheadAny&&!S.expand&&remaining>0&&!planOver)? `<div class="banner">🚀 <b>Stark – du bist schneller als geplant!</b> Bei deinem Tempo hast du voraussichtlich schon nach <b>~${rawLD} Lerntagen</b> (statt ${totalLD()}) alle Wörter durch. Was möchtest du?<div class="row" style="margin-top:var(--space-2)">${canShorten?`<button class="btn small" id="hfit">Plan verkürzen</button>`:``}<button class="btn sec small" id="hexp">Mehr Wörter in gleicher Zeit</button></div></div>`:"";
   const nothing = q.due.length+q.news.length===0;
-  const projLine = remaining>0? (hist? `voraussichtlich alle Wörter eingeführt am ${fmt(projEnd)}${ahead?" 🚀":""}` : `Ziel: alle Wörter bis ${fmt(S.plan.dates[S.plan.dates.length-1])}`) : "alle Wörter eingeführt – jetzt festigen";
+  const projLine = remaining>0? (hist? `bei deinem Tempo noch ~${Math.max(1,Math.ceil(remaining/newPerDayEst()))} Lerntage, bis alle Wörter eingeführt sind${ahead?" 🚀":""}` : `Ziel: alle ${S.plan.total} Wörter in ${totalLD()} Lerntagen – du bestimmst, wann`) : "alle Wörter eingeführt – jetzt festigen";
   const pname=(profiles().find(p=>p.id===PID)||{}).name||"";
+  const never=introducedCount()===0&&Object.keys(S.done).length===0;
   show(`${reminder}<div class="card">
     <div class="top"><h2>Hey ${esc(pname)}!</h2><span class="pill">🔥 ${S.streak} Tage</span></div>
-    <p style="margin:0 0 10px;font-weight:600">Lass uns loslegen.</p>
+    <p style="margin:0 0 10px;font-weight:600">${never?"Lass uns loslegen.":"Schön, dass du hier bist."}</p>
     <p class="small muted">${dayLabel} · ${projLine}</p>
     ${festBanner}${(doneToday||nothing)?"":speedBanner}
     <div class="ringwrap" style="margin:var(--space-3) 0">
@@ -328,18 +341,18 @@ function screenHome(){
     ${fullListSicher()?(()=>{const b=extraStats();return `<div class="banner">🏅 <b>Bonus-Wortschatz freigeschaltet!</b> Du hast dein Paket gemeistert – ${b.total} Extra-Wörter deiner Stufe warten (die häufigsten zuerst). Ganz ohne Pflicht: Dein Plan bleibt geschafft. Bisher: ${b.seen}/${b.total} begonnen · ${b.sicher} sicher.</div>`;})():(S.expand?(()=>{const b=extraStats();return `<div class="banner">🚀 <b>Mehr-Lernen-Modus:</b> Dein Tempo bestimmt das Pensum – Extra-Wörter kommen automatisch dazu, Wiederholungen deines Pakets laufen immer zuerst.${b.seen>0?` Extra bisher: ${b.seen} begonnen · ${b.sicher} sicher.`:""}</div>`;})():"")}
     <div class="info"><b>Wie wird ein Wort „sicher"?</b><br>Erst wenn du es an mehreren Tagen richtig erinnerst – mit größer werdenden Abständen. Dann rutscht es auch vom Kurzzeit- ins Langzeitgedächtnis und bleibt sicher im Gedächtnis.</div>
     ${ (doneToday||nothing)
-      ? `<div class="banner">${nothing&&!doneToday?"Für heute ist nichts fällig. ":""}${doneToday?"🎉 Für heute geschafft! ":""}${pep("day")}</div>
+      ? `<div class="banner">${nothing&&!doneToday?(never?"Viel Spaß und gutes Gelingen.":"Für heute ist nichts fällig. "+pep("day")):""}${doneToday?"🎉 Für heute geschafft! "+pep("day"):""}</div>
          ${speedBanner}
-         <button class="btn block" id="more">Trotzdem weiter lernen</button>`
-      : `<p>Heute dran: <b>${q.news.length} neue</b> + <b>${q.due.length} Wiederholungen</b> <span class="small muted">(dein Tagespensum ${S.expand?"nach deinem Tempo":"laut Plan"} – mit „Trotzdem weiter lernen" geht jederzeit mehr)</span>.</p>
+         <button class="btn block" id="more">${never?"Los geht's ▶":"Trotzdem weiter lernen"}</button>`
+      : `${never?`<div class="banner">Viel Spaß und gutes Gelingen.</div>`:""}<p>Heute dran: <b>${q.news.length} neue</b> + <b>${q.due.length} Wiederholungen</b> <span class="small muted">(dein Tagespensum ${S.expand?"nach deinem Tempo":"laut Plan"} – mit „Trotzdem weiter lernen" geht jederzeit mehr)</span>.</p>
          <div class="opts" id="mode"><div class="opt active" data-v="rec">Erkennen</div><div class="opt" data-v="type">Eintippen</div></div>
-         <button class="btn block" id="start">Üben starten ▶</button>` }
+         <button class="btn block" id="start">${never?"Los geht's ▶":"Üben starten ▶"}</button>` }
     <div class="row noprint" style="margin-top:var(--space-3)"><button class="btn ghost small" id="planbtn">Lernplan</button><button class="btn ghost small" id="adj">Tempo/Umfang anpassen</button></div>
   </div>`);
   let mode="rec";
   if(!(doneToday||nothing)){ app.querySelectorAll("#mode .opt").forEach(o=>o.onclick=()=>{app.querySelectorAll("#mode .opt").forEach(x=>x.classList.remove("active"));o.classList.add("active");mode=o.dataset.v;});
     $("#start").onclick=()=>startSession(q,mode); }
-  else { $("#more").onclick=()=>{ const q2=buildQueue(Math.max(6,Math.round(dailyBudget()/2))); if(q2.due.length+q2.news.length===0){alert("Super – aktuell ist alles gelernt und nichts fällig!");return;} startSession(q2,"rec"); }; }
+  else { $("#more").onclick=()=>{ const q2=never? buildQueue() : buildQueue(Math.max(6,Math.round(dailyBudget()/2))); if(q2.due.length+q2.news.length===0){alert("Super – aktuell ist alles gelernt und nichts fällig!");return;} startSession(q2,"rec"); }; }
   const hfit=$("#hfit"); if(hfit)hfit.onclick=adjustToPace;
   const hexp=$("#hexp"); if(hexp)hexp.onclick=()=>{ S.expand=true; saveState(); alert("Mehr-Lernen-Modus ist an: Dein Tagespensum richtet sich jetzt nach deinem Tempo, Extra-Wörter kommen automatisch dazu. Die Wiederholungen deines Pakets laufen immer zuerst weiter."); screenHome(); };
   $("#planbtn").onclick=screenPlan; $("#adj").onclick=screenAdjust;
@@ -353,7 +366,7 @@ function screenAdjust(){ const s=S.settings;
   <label class="fld">Tägliche Lernzeit</label><div class="opts" id="aMin">${[15,20,30,45].map(m=>`<div class="opt ${s.minutes===m?"active":""}" data-v="${m}">${m} Min</div>`).join("")}</div>
   <label class="fld">Zeitraum <span class="small muted">(min. 2 Wochen)</span></label><div class="opts" id="aWeeks">${[2,3].map(w=>`<div class="opt ${s.weeks===w?"active":""}" data-v="${w}">${w} Wochen</div>`).join("")}</div>
   <label class="fld">Lerntage pro Woche <span class="small muted">(min. 5)</span></label><div class="opts" id="aDays">${[5,6,7].map(w=>`<div class="opt ${s.days===w?"active":""}" data-v="${w}">${w}</div>`).join("")}</div>
-  <div class="info">Kürzer als 2 Wochen / 5 Tage geht bewusst nicht – verteiltes Lernen bleibt am besten hängen. Schneller kommst du über mehr Zeit pro Tag oder „Trotzdem weiter lernen" voran.</div>
+  <div class="info">Deine Wahl ergibt die Gesamtzahl deiner Lerntage (z. B. 2 Wochen × 5 Tage = 10 – das Minimum, weniger geht nicht). Wann du lernst und wann du pausierst, entscheidest du selbst – die App zählt nur deine absolvierten Lerntage. Schneller kommst du über mehr Zeit pro Tag oder „Trotzdem weiter lernen" voran.</div>
   <label class="fld">Mehr Inhalt</label>
   ${s.scope==="K"?`<button class="btn sec block" id="expand">Auf Erweitert (450) aufstocken – Fortschritt bleibt</button>`:`<p class="small muted">Du lernst bereits das erweiterte Paket (450).</p>`}
   <button class="btn block" id="save" style="margin-top:var(--space-3)">Übernehmen</button>
@@ -389,7 +402,7 @@ function nextCard(){
     ? `<input type="text" id="ans" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Antwort eintippen…"><button class="btn block" id="check">Prüfen</button>`
     : `<button class="btn block" id="reveal">Auflösen</button>`;
   show(`<div class="card">
-    <div class="top"><button class="btn ghost small" id="stop">Beenden</button><span class="small muted">Heute ${SESS.done}/${SESS.target}</span></div>
+    <div class="top"><button class="btn small" id="stop">Beenden</button><span class="small muted">Heute ${SESS.done}/${SESS.target}</span></div>
     <div class="bar"><div style="width:${pct}%"></div></div>
     <div class="prompt">${esc(prompt)}</div>
     ${askEN?`<div class="ex">${esc(w.ex||"")}</div>`:``}
@@ -450,7 +463,7 @@ function matches(input,sol){ const n=normalize(input); if(!n)return false; const
 function screenProgress(){ if(!S||!S.settings){route();return;} const st=stats();
   show(`<div class="card">${greetHtml()}<h2>Fortschritt</h2>
     <div class="ringwrap" style="margin:var(--space-3) 0"><div class="ring" style="--p:${st.pct}"><div>${st.pct}%</div></div>
-    <div><p><b>${st.sicher}</b> sicher · <b>${st.ueben}</b> am Üben · <b>${st.neu}</b> noch neu zu lernen</p>
+    <div><p><span style="white-space:nowrap"><b>${st.sicher}</b> sicher</span> · <span style="white-space:nowrap"><b>${st.ueben}</b> am Üben</span> · <span style="white-space:nowrap"><b>${st.neu}</b> noch neu zu lernen</span></p>
     <p class="small muted">Richtung: ${S.settings.dir==="en2de"?"EN→DE":"DE→EN"} · Streak: 🔥 ${S.streak}</p>
     ${(fullListSicher()||extraStats().seen>0)?(()=>{const b=extraStats();return `<p class="small muted">🏅 Extra-Wortschatz: ${b.sicher} sicher · ${b.seen} begonnen · ${b.total} gesamt</p>`;})():""}</div></div>
     <button class="btn sec block" id="corr">✎ Korrekturen exportieren (${(S.corrections||[]).length})</button>
