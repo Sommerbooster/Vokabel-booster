@@ -88,7 +88,7 @@ canvas#cf{position:fixed;inset:0;pointer-events:none;z-index:50;}
 <body>
 <canvas id="cf"></canvas>
 <header class="app"><div class="brand"><h1 id="brand" style="cursor:pointer" title="Über den Booster">🌱 Vokabel-Sommer-Booster</h1>
-  <div class="nav"><button id="navInfo">Info</button><button id="navProgress">Fortschritt</button><button id="navAdjust">Anpassen</button><button id="navProfile">Profil</button></div></div></header>
+  <div class="nav"><button id="navStart">Start</button><button id="navInfo">Info</button><button id="navProgress">Fortschritt</button><button id="navAdjust">Anpassen</button><button id="navProfile">Profil</button></div></div></header>
 <main class="wrap" id="app"></main>
 <div class="status" id="statusStrip"></div>
 
@@ -102,7 +102,7 @@ Object.keys(BONUS).forEach(lv=>{ BONUS[lv].forEach(w=>{ VOCAB[lv].push({en:w.en,
 const $=(s,r=document)=>r.querySelector(s);
 const app=$("#app");
 const DAY=864e5;
-const APP_VERSION="11 · 05.07.2026";
+const APP_VERSION="12 · 06.07.2026";
 const todayISO=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10);};
 const INTERVAL={1:2,2:3,3:7}; // Lernen Tag 0 → 1. Wdh. +2 → 2. Wdh. +5 (= „sicher") → Kontrolle +7
 const MILES=[50,75,100,150,200];
@@ -208,11 +208,17 @@ function screenWelcome(){
 // Profiles
 function screenProfiles(){ const ps=profiles();
   show(`<div class="card"><h2>Wer lernt?</h2>
-  <div>${ps.map(p=>`<button class="btn block" data-id="${p.id}">${esc(p.name)}</button>`).join("")||'<p class="muted">Noch kein Profil.</p>'}</div>
+  <div>${ps.map(p=>`<div class="row" style="margin-bottom:6px"><button class="btn block" data-id="${p.id}" style="flex:1">${esc(p.name)}</button><button class="btn ghost small" data-del="${p.id}" title="Profil löschen">🗑</button></div>`).join("")||'<p class="muted">Noch kein Profil.</p>'}</div>
   <label class="fld">Neues Profil</label>
   <div class="row"><input type="text" id="pname" placeholder="Vorname" style="flex:1"><button class="btn" id="padd">Anlegen</button></div></div>`);
   $("#padd").onclick=()=>{ const n=$("#pname").value.trim(); if(!n)return; const id="p"+Date.now(); const a=profiles(); a.push({id,name:n}); setProfiles(a); selectProfile(id); };
   app.querySelectorAll("[data-id]").forEach(b=>b.onclick=()=>selectProfile(b.dataset.id));
+  app.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{ const id=b.dataset.del; const p=profiles().find(x=>x.id===id); if(!p)return;
+    if(!confirm("Profil „"+p.name+"“ wirklich löschen?\n\nDer gesamte Lernfortschritt dieses Profils wird endgültig gelöscht."))return;
+    if(!confirm("Ganz sicher? Das kann nicht rückgängig gemacht werden."))return;
+    setProfiles(profiles().filter(x=>x.id!==id)); localStorage.removeItem("vb_state_"+id);
+    if(PID===id){ PID=null; localStorage.removeItem("vb_active"); S=null; }
+    screenProfiles(); });
 }
 function selectProfile(id){ PID=id; localStorage.setItem("vb_active",id); loadState(); if(!S){S=freshState();saveState();} route(); }
 function greetHtml(){ const p=profiles().find(x=>x.id===PID); return p?`<p style="margin:0 0 4px;font-weight:700;font-size:1.15rem;color:var(--color-heading)">Hey ${esc(p.name)}!</p>`:""; }
@@ -518,6 +524,7 @@ window.addEventListener("popstate",()=>{ if(SESS){ SESS=null; UNDO=null; } if(PI
 
 // nav
 $("#brand").onclick=()=>screenWelcome();
+$("#navStart").onclick=()=>{ if(SESS){ SESS=null; UNDO=null; } if(PID){ loadState(); (S&&S.settings&&S.plan)?screenHome():route(); } else route(); };
 $("#navInfo").onclick=()=>screenWelcome();
 $("#navProgress").onclick=()=>{ if(PID){loadState(); (S&&S.settings)?screenProgress():route();} };
 $("#navAdjust").onclick=()=>{ if(PID){loadState(); (S&&S.settings&&S.plan)?screenAdjust():route();} };
