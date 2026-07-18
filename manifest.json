@@ -1,0 +1,31 @@
+{
+  "name": "Vokabel-Sommer-Booster",
+  "short_name": "Vokabel-Booster",
+  "description": "Englisch-Vokabeln der Klassen 5-8 und Profi-Booster in 2-3 Wochen auffrischen - ohne Anmeldung, alle Lerndaten bleiben auf dem Gerät.",
+  "lang": "de",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FBF8F2",
+  "theme_color": "#FBF8F2",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
