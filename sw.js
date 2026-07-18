@@ -3,7 +3,7 @@
    bei fehlendem Internet aus dem Cache (offline nutzbar).
    Diese Datei muss bei App-Updates NICHT geändert werden. */
 "use strict";
-const CACHE = "vb-cache-v2";
+const CACHE = "vb-cache-v3";
 const ASSETS = ["./", "./manifest.json", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 
 self.addEventListener("install", (e) => {
@@ -31,6 +31,18 @@ self.addEventListener("fetch", (e) => {
           return res;
         })
         .catch(() => caches.match("./"))
+    );
+    return;
+  }
+  // PDFs (Rechtstexte): immer erst frisch aus dem Netz, Cache nur als Offline-Ersatz
+  if (new URL(req.url).pathname.endsWith(".pdf")) {
+    e.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
+          return res;
+        })
+        .catch(() => caches.match(req))
     );
     return;
   }
