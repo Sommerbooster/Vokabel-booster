@@ -120,7 +120,7 @@ Object.keys(BONUS).forEach(lv=>{ BONUS[lv].forEach(w=>{ VOCAB[lv].push({en:w.en,
 const $=(s,r=document)=>r.querySelector(s);
 const app=$("#app");
 const DAY=864e5;
-const APP_VERSION="19 · 18.07.2026";
+const APP_VERSION="20 · 19.07.2026";
 // PWA: Offline-Fähigkeit + dauerhafter Speicher
 if("serviceWorker" in navigator){ window.addEventListener("load",()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); }); }
 if(navigator.storage&&navigator.storage.persist){ navigator.storage.persist().catch(()=>{}); }
@@ -223,6 +223,7 @@ function screenWelcome(){
     <p><b>Unsere Philosophie:</b> Bau dir eine Lernroutine auf, die du mit in das neue Schuljahr nehmen kannst. Lerne lieber regelmäßig und kürzer mit kleineren Lerneinheiten, als geballt an wenigen Tagen und mit viel Lernstoff auf einmal.</p>
     <p>Und wer sein Paket meistert, schaltet den Bonus-Wortschatz seiner Stufe frei. 🏅</p>
     <p style="margin-top:var(--space-3)">Viel Freude beim Lernen wünscht dir<br><span style="color:var(--secondary);font-size:1.1rem">Annette C. Breuer</span></p>
+    <p class="small" style="margin-top:var(--space-2)">Fragen, Wünsche oder einen Fehler entdeckt? Schreib mir gern: <a href="mailto:annette.c.breuer@gmail.com" style="color:var(--secondary);text-decoration:none">annette.c.breuer@gmail.com</a></p>
     <button class="btn block" id="wstart">Los geht's ▶</button>
     <p class="small muted" style="text-align:center;margin-top:var(--space-2)">© 2026 Annette C. Breuer · Version ${APP_VERSION}</p>
   </div>`);
